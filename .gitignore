@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# env files - never commit real secrets
+.env
+.env.local
+
+# build output
+dist/
+build/
+.next/
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/*
+!.vscode/extensions.json
