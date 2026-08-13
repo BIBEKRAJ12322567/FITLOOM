@@ -7,6 +7,7 @@ module.exports = {
   Exercise: require('./Exercise'),
   WorkoutPlan: require('./WorkoutPlan'),
   WorkoutLog: require('./WorkoutLog'),
+  DietPlan: require('./DietPlan'),
   TrainerProfile: require('./TrainerProfile'),
   GymTrainer: require('./GymTrainer'),
   TrainerBooking: require('./TrainerBooking'),
@@ -17,3 +18,4 @@ module.exports = {
   Notification: require('./Notification'),
   RefreshToken: require('./RefreshToken'),
 };
+ 

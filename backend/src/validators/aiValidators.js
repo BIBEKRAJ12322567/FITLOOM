@@ -30,4 +30,26 @@ const generateWorkoutValidators = [
   runValidation,
 ];
 
-module.exports = { generateWorkoutValidators };
+const generateDietPlanValidators = [
+  body('weightKg').optional().isFloat({ min: 20, max: 300 }).withMessage('weightKg must be a realistic value'),
+  body('heightCm').optional().isFloat({ min: 100, max: 250 }).withMessage('heightCm must be a realistic value'),
+  body('age').optional().isInt({ min: 13, max: 100 }).withMessage('age must be a realistic value'),
+  body('sex').optional().isIn(['male', 'female']).withMessage('sex must be "male" or "female"'),
+  body('activityLevel')
+    .optional()
+    .isIn(['sedentary', 'light', 'moderate', 'active', 'very_active'])
+    .withMessage('Invalid activityLevel'),
+  body('goal')
+    .optional()
+    .isIn(['weight_loss', 'muscle_gain', 'general_fitness', 'strength', 'endurance'])
+    .withMessage('Invalid goal'),
+  body('dietaryPreference')
+    .optional()
+    .isIn(['no_preference', 'vegetarian', 'vegan', 'non_vegetarian'])
+    .withMessage('Invalid dietaryPreference'),
+  body('cuisinePreference').optional().isString().isLength({ max: 50 }),
+  body('notes').optional().isString().isLength({ max: 500 }).withMessage('notes must be under 500 characters'),
+  runValidation,
+];
+
+module.exports = { generateWorkoutValidators, generateDietPlanValidators };

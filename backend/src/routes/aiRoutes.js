@@ -2,10 +2,10 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const aiController = require('../controllers/aiController');
 const authenticate = require('../middleware/authenticate');
-const { generateWorkoutValidators } = require('../validators/aiValidators');
-
+const { generateWorkoutValidators, generateDietPlanValidators } = require('../validators/aiValidators');
+ 
 const router = express.Router();
-
+ 
 // AI calls cost money and are slower than normal endpoints — a tighter,
 // dedicated limit stops a buggy client (or an abusive one) from running up
 // the OpenAI/Gemini bill via retries.
@@ -16,7 +16,7 @@ const aiRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many AI generation requests — try again later' } },
 });
-
+ 
 router.post(
   '/workouts/generate',
   authenticate,
@@ -24,5 +24,14 @@ router.post(
   generateWorkoutValidators,
   aiController.generateWorkout
 );
-
+ 
+router.post(
+  '/diet/generate',
+  authenticate,
+  aiRateLimiter,
+  generateDietPlanValidators,
+  aiController.generateDietPlan
+);
+ 
 module.exports = router;
+ 

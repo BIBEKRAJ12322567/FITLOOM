@@ -1,5 +1,6 @@
 const workoutGeneratorService = require('../services/ai/workoutGeneratorService');
-
+const dietPlanGeneratorService = require('../services/ai/dietPlanGeneratorService');
+ 
 async function generateWorkout(req, res, next) {
   try {
     const { daysPerWeek, goal, level, equipment, muscleGroups, notes } = req.body;
@@ -11,7 +12,7 @@ async function generateWorkout(req, res, next) {
       muscleGroups,
       notes,
     });
-
+ 
     res.status(201).json({
       workoutPlan,
       // Surfacing this lets the client show "we simplified your plan
@@ -22,5 +23,38 @@ async function generateWorkout(req, res, next) {
     next(err);
   }
 }
-
-module.exports = { generateWorkout };
+ 
+async function generateDietPlan(req, res, next) {
+  try {
+    const { weightKg, heightCm, age, sex, activityLevel, goal, dietaryPreference, cuisinePreference, notes } =
+      req.body;
+    const { dietPlan, stats } = await dietPlanGeneratorService.generateDietPlan(req.user.id, {
+      weightKg,
+      heightCm,
+      age,
+      sex,
+      activityLevel,
+      goal,
+      dietaryPreference,
+      cuisinePreference,
+      notes,
+    });
+ 
+    res.status(201).json({
+      dietPlan,
+      // Lets the client show a "meals landed X% off your target" note if
+      // the AI's food choices deviated meaningfully from the fixed
+      // calorie target it was given.
+      meta: {
+        droppedItems: stats.droppedItems,
+        deviationPct: stats.deviationPct,
+        totalCalories: stats.totalCalories,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+ 
+module.exports = { generateWorkout, generateDietPlan };
+ 
