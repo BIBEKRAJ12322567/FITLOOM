@@ -4,7 +4,8 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { aiApi } from '../../api/aiApi';
-
+import { exerciseApi } from '../../api/exerciseApi';
+ 
 const GOALS = [
   { value: 'weight_loss', label: 'Weight loss' },
   { value: 'muscle_gain', label: 'Muscle gain' },
@@ -12,23 +13,24 @@ const GOALS = [
   { value: 'strength', label: 'Strength' },
   { value: 'endurance', label: 'Endurance' },
 ];
-
+ 
 const LEVELS = ['beginner', 'intermediate', 'advanced'];
-
+ 
 export default function AICoach() {
   const [form, setForm] = useState({ goal: 'general_fitness', level: 'beginner', daysPerWeek: 3, notes: '' });
   const [status, setStatus] = useState('idle'); // idle | loading | success | error
   const [errorMessage, setErrorMessage] = useState('');
   const [plan, setPlan] = useState(null);
   const [meta, setMeta] = useState(null);
-
+  const [exercisesById, setExercisesById] = useState({});
+ 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-
+ 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus('loading');
     setErrorMessage('');
-
+ 
     try {
       const data = await aiApi.generateWorkout({
         goal: form.goal,
@@ -43,6 +45,23 @@ export default function AICoach() {
       // comment in Dashboard.jsx for why sessionStorage is a pragmatic
       // stand-in here rather than a real "recent plans" endpoint.
       sessionStorage.setItem('latestWorkoutPlan', JSON.stringify(data.workoutPlan));
+ 
+      // The plan only carries exerciseIds — resolve them to real names/muscle
+      // groups in one batched call rather than N individual lookups.
+      const ids = [
+        ...new Set(
+          data.workoutPlan.days.flatMap((day) => day.exercises.map((ex) => ex.exerciseId))
+        ),
+      ];
+      if (ids.length > 0) {
+        try {
+          const resolved = await exerciseApi.getByIds(ids);
+          setExercisesById(resolved);
+        } catch {
+          // Non-fatal — the plan itself already succeeded and is displayed;
+          // worst case exercise names fall back to a generic label below.
+        }
+      }
     } catch (err) {
       setStatus('error');
       setErrorMessage(
@@ -50,7 +69,7 @@ export default function AICoach() {
       );
     }
   };
-
+ 
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6 flex items-center gap-3">
@@ -64,7 +83,7 @@ export default function AICoach() {
           </p>
         </div>
       </div>
-
+ 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -86,7 +105,7 @@ export default function AICoach() {
               ))}
             </div>
           </div>
-
+ 
           <div>
             <label className="mb-2 block text-sm font-medium text-muted">Level</label>
             <div className="flex gap-2">
@@ -106,7 +125,7 @@ export default function AICoach() {
               ))}
             </div>
           </div>
-
+ 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-muted">Days per week</label>
             <input
@@ -120,7 +139,7 @@ export default function AICoach() {
             />
             <p className="mt-1 text-sm font-mono text-chalk">{form.daysPerWeek} days/week</p>
           </div>
-
+ 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-muted">Notes (optional)</label>
             <textarea
@@ -133,7 +152,7 @@ export default function AICoach() {
               className="w-full rounded-lg border border-steel bg-raised px-4 py-2.5 text-chalk placeholder:text-muted/60 focus:border-tape focus:outline-none"
             />
           </div>
-
+ 
           <Button type="submit" disabled={status === 'loading'} className="w-full gap-2">
             {status === 'loading' ? (
               <>
@@ -147,7 +166,7 @@ export default function AICoach() {
           </Button>
         </form>
       </Card>
-
+ 
       {status === 'error' && (
         <div className="mt-5 flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -157,7 +176,7 @@ export default function AICoach() {
           </div>
         </div>
       )}
-
+ 
       {status === 'success' && plan && (
         <Card className="mt-5">
           <div className="mb-4 flex items-start justify-between gap-2">
@@ -171,30 +190,42 @@ export default function AICoach() {
               <Sparkles size={12} /> AI-generated
             </Badge>
           </div>
-
+ 
           {meta?.droppedExercises > 0 && (
             <p className="mb-4 text-xs text-muted">
               Simplified slightly to only use exercises that match your level and injury profile
               ({meta.droppedExercises} substitution{meta.droppedExercises !== 1 ? 's' : ''} made).
             </p>
           )}
-
+ 
           <div className="space-y-4">
             {plan.days.map((day, i) => (
               <div key={i} className="rounded-xl border border-steel bg-raised p-4">
                 <h3 className="mb-3 font-semibold text-chalk">{day.dayLabel}</h3>
                 <div className="space-y-2">
-                  {day.exercises.map((ex, j) => (
-                    <div
-                      key={j}
-                      className="flex items-center justify-between border-b border-steel/60 pb-2 text-sm last:border-0 last:pb-0"
-                    >
-                      <span className="text-chalk">Exercise {j + 1}</span>
-                      <span className="font-mono text-muted">
-                        {ex.sets} × {ex.repsTarget} · {ex.restSeconds}s rest
-                      </span>
-                    </div>
-                  ))}
+                  {day.exercises.map((ex, j) => {
+                    const exerciseInfo = exercisesById[ex.exerciseId];
+                    return (
+                      <div
+                        key={j}
+                        className="flex items-center justify-between gap-3 border-b border-steel/60 pb-2 text-sm last:border-0 last:pb-0"
+                      >
+                        <div className="min-w-0">
+                          <span className="text-chalk">
+                            {exerciseInfo?.name || 'Exercise details unavailable'}
+                          </span>
+                          {exerciseInfo?.muscleGroups?.length > 0 && (
+                            <span className="ml-2 text-xs text-muted">
+                              {exerciseInfo.muscleGroups.join(', ')}
+                            </span>
+                          )}
+                        </div>
+                        <span className="shrink-0 font-mono text-muted">
+                          {ex.sets} × {ex.repsTarget} · {ex.restSeconds}s rest
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -204,3 +235,4 @@ export default function AICoach() {
     </div>
   );
 }
+ 
