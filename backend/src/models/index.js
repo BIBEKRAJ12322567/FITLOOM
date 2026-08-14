@@ -17,5 +17,5 @@ module.exports = {
   ChatConversation: require('./ChatConversation'),
   Notification: require('./Notification'),
   RefreshToken: require('./RefreshToken'),
+  GymReview: require('./GymReview'),
 };
- 

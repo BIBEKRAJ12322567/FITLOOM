@@ -8,10 +8,13 @@ import {
   Salad,
   Calculator,
   Building2,
+  Search,
   Users,
   UserCircle,
+  Settings,
 } from 'lucide-react';
- 
+import { useAuth } from '../../context/AuthContext';
+
 const NAV_SECTIONS = [
   {
     label: 'Train',
@@ -34,12 +37,26 @@ const NAV_SECTIONS = [
     label: 'Gym',
     items: [
       { to: '/app/my-gym', label: 'My Gym', icon: Building2 },
+      { to: '/app/gyms', label: 'Find a Gym', icon: Search },
       { to: '/app/trainers', label: 'Trainers', icon: Users },
     ],
   },
 ];
- 
+
 export default function Sidebar({ open, onClose }) {
+  const { user } = useAuth();
+  const isGymOwner = user?.role === 'gym_owner';
+
+  const sections = isGymOwner
+    ? [
+        ...NAV_SECTIONS,
+        {
+          label: 'Manage',
+          items: [{ to: '/app/owner', label: 'Gym Management', icon: Settings }],
+        },
+      ]
+    : NAV_SECTIONS;
+
   return (
     <>
       {open && <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={onClose} />}
@@ -52,9 +69,9 @@ export default function Sidebar({ open, onClose }) {
           <Dumbbell className="text-tape" size={22} />
           <span className="font-display text-2xl tracking-wide text-chalk">FITLOOM</span>
         </div>
- 
+
         <nav className="space-y-6 overflow-y-auto px-3 py-6" style={{ height: 'calc(100vh - 4rem)' }}>
-          {NAV_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <div key={section.label}>
               <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted">
                 {section.label}
@@ -98,4 +115,3 @@ export default function Sidebar({ open, onClose }) {
     </>
   );
 }
- 

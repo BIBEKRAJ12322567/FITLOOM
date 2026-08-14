@@ -26,6 +26,10 @@ import CaloriesCalculator from './pages/user/calculators/CaloriesCalculator';
 import BmiCalculator from './pages/user/calculators/BmiCalculator';
 import BodyFatCalculator from './pages/user/calculators/BodyFatCalculator';
 import MyGym from './pages/user/MyGym';
+import BrowseGyms from './pages/user/gyms/BrowseGyms';
+import GymDetail from './pages/user/gyms/GymDetail';
+import GymStore from './pages/user/gyms/GymStore';
+import OwnerDashboard from './pages/user/OwnerDashboard';
 import UserTrainers from './pages/user/Trainers';
 import Profile from './pages/user/Profile';
 
@@ -64,6 +68,10 @@ export default function App() {
         <Route path="calculators/bmi" element={<BmiCalculator />} />
         <Route path="calculators/body-fat" element={<BodyFatCalculator />} />
         <Route path="my-gym" element={<MyGym />} />
+        <Route path="gyms" element={<BrowseGyms />} />
+        <Route path="gyms/:gymId" element={<GymDetail />} />
+        <Route path="gyms/:gymId/store" element={<GymStore />} />
+        <Route path="owner" element={<OwnerDashboard />} />
         <Route path="trainers" element={<UserTrainers />} />
         <Route path="profile" element={<Profile />} />
       </Route>

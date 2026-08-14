@@ -33,8 +33,20 @@ const gymSchema = new Schema(
       qrAttendanceEnabled: { type: Boolean, default: false },
       currency: { type: String, default: 'INR' },
     },
+
+    facilities: [String], // e.g. ['Cardio zone', 'Free weights', 'Locker rooms', 'Steam room']
+    description: String,
+
+    // Denormalized rating, same pattern as TrainerProfile.ratingAvg —
+    // recomputed by reviewController whenever a GymReview is created/updated,
+    // rather than aggregated live on every gym-list request.
+    ratingAvg: { type: Number, default: 0, min: 0, max: 5 },
+    ratingCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
+
+gymSchema.index({ 'address.city': 1 });
+gymSchema.index({ ratingAvg: -1 });
 
 module.exports = mongoose.model('Gym', gymSchema);
