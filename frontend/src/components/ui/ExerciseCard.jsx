@@ -7,7 +7,7 @@ const DIFFICULTY_TONE = { beginner: 'success', intermediate: 'warning', advanced
 
 export default function ExerciseCard({ exercise }) {
   return (
-    <Link to={`/app/exercises/${exercise.id}`}>
+    <Link to={`/app/exercises/${exercise._id}`}>
       <Card className="group h-full transition-colors hover:border-tape/50">
         <div className="mb-4 flex aspect-video items-center justify-center rounded-xl bg-raised text-muted">
           {exercise.videoUrl ? (

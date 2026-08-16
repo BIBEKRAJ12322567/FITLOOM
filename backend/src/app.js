@@ -6,6 +6,7 @@ const aiRoutes = require('./routes/aiRoutes');
 const exerciseRoutes = require('./routes/exerciseRoutes');
 const gymRoutes = require('./routes/gymRoutes');
 const membershipRoutes = require('./routes/membershipRoutes');
+const workoutRoutes = require('./routes/workoutRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/exercises', exerciseRoutes);
 app.use('/api/gyms', gymRoutes);
 app.use('/api/memberships', membershipRoutes);
+app.use('/api/workouts', workoutRoutes);
 
 // 404 for unmatched routes
 app.use((req, res) => {
