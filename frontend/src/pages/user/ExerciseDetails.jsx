@@ -40,12 +40,28 @@ export default function ExerciseDetails() {
       </Link>
 
       <Card>
-        <div className="mb-4 flex aspect-video items-center justify-center rounded-xl bg-raised text-muted">
-          {exercise.videoUrl ? (
-            <PlayCircle size={48} className="text-tape/80" />
-          ) : (
-            <Dumbbell size={40} />
-          )}
+        <div className="mb-4 flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-raised text-muted">
+          {exercise.thumbnailUrl ? (
+            <img
+              src={exercise.thumbnailUrl}
+              alt={exercise.name}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          <div
+            className="flex h-full w-full items-center justify-center"
+            style={{ display: exercise.thumbnailUrl ? 'none' : 'flex' }}
+          >
+            {exercise.videoUrl ? (
+              <PlayCircle size={48} className="text-tape/80" />
+            ) : (
+              <Dumbbell size={40} />
+            )}
+          </div>
         </div>
 
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">

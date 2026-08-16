@@ -14,6 +14,50 @@ const mongoose = require('mongoose');
 const config = require('../config/env');
 const Exercise = require('../models/Exercise');
 
+/**
+ * Fetches a real exercise thumbnail from wger.de — a free, open-source
+ * fitness database (CC-BY-SA 4.0 licensed, public API, no auth required).
+ * https://wger.de
+ *
+ * IMPORTANT: this call was written against wger's documented API shape but
+ * has NOT been tested against the live API (this project's sandbox can't
+ * reach wger.de). It's defensively coded — any failure (network, unexpected
+ * response shape, no match found) falls back to `null` and the seed
+ * continues normally with the icon placeholder, it never crashes the seed.
+ * Watch the console output when you run this — it'll tell you exactly
+ * which exercises got a real image and which didn't.
+ */
+async function fetchWgerThumbnail(exerciseName) {
+  try {
+    // wger's base exercise list, English only, first 200 results — enough
+    // to cover common compound/isolation lifts. Client-side name matching
+    // avoids depending on wger's search-endpoint response shape, which
+    // isn't fully documented publicly.
+    const listRes = await fetch('https://wger.de/api/v2/exercise/?language=2&limit=200&format=json');
+    if (!listRes.ok) return null;
+    const listData = await listRes.json();
+
+    const nameLower = exerciseName.toLowerCase();
+    const match = listData.results?.find(
+      (ex) => ex.name && (ex.name.toLowerCase().includes(nameLower) || nameLower.includes(ex.name.toLowerCase()))
+    );
+    if (!match) return null;
+
+    const exerciseId = match.id || match.base_id || match.exercise_base;
+    if (!exerciseId) return null;
+
+    const imgRes = await fetch(`https://wger.de/api/v2/exerciseimage/?exercise=${exerciseId}&is_main=True&format=json`);
+    if (!imgRes.ok) return null;
+    const imgData = await imgRes.json();
+
+    const image = imgData.results?.[0];
+    return image?.thumbnails?.medium || image?.image || null;
+  } catch (err) {
+    console.warn(`  (wger lookup failed for "${exerciseName}": ${err.message})`);
+    return null;
+  }
+}
+
 const exercises = [
   {
     name: 'Bodyweight Squat',
@@ -204,10 +248,25 @@ async function seed() {
   const existingCount = await Exercise.countDocuments();
   if (existingCount > 0) {
     console.log(`Exercise collection already has ${existingCount} documents. Skipping seed.`);
-    console.log('Delete the collection first if you want to reseed from scratch.');
+    console.log('Delete the collection first if you want to reseed from scratch (with images).');
     await mongoose.disconnect();
     return;
   }
+
+  console.log('Looking up real thumbnails from wger.de for each exercise (this may take a minute)...');
+  let matchedCount = 0;
+  for (const exercise of exercises) {
+    const thumbnailUrl = await fetchWgerThumbnail(exercise.name);
+    if (thumbnailUrl) {
+      exercise.thumbnailUrl = thumbnailUrl;
+      matchedCount += 1;
+      console.log(`  ✓ ${exercise.name} — found image`);
+    } else {
+      console.log(`  – ${exercise.name} — no match, will use icon placeholder`);
+    }
+  }
+  console.log(`Matched ${matchedCount}/${exercises.length} exercises with a real thumbnail from wger.de.`);
+  console.log('Images via wger.de, licensed CC-BY-SA 4.0 (https://wger.de).');
 
   const inserted = await Exercise.insertMany(exercises);
   console.log(`Seeded ${inserted.length} exercises.`);

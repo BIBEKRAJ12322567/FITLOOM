@@ -9,12 +9,31 @@ export default function ExerciseCard({ exercise }) {
   return (
     <Link to={`/app/exercises/${exercise._id}`}>
       <Card className="group h-full transition-colors hover:border-tape/50">
-        <div className="mb-4 flex aspect-video items-center justify-center rounded-xl bg-raised text-muted">
-          {exercise.videoUrl ? (
-            <PlayCircle size={32} className="text-tape/80 transition-transform group-hover:scale-110" />
-          ) : (
-            <Dumbbell size={28} />
-          )}
+        <div className="mb-4 flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-raised text-muted">
+          {exercise.thumbnailUrl ? (
+            <img
+              src={exercise.thumbnailUrl}
+              alt={exercise.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                // If the external image host is down/blocked, fall back to
+                // the icon rather than showing a broken-image glyph.
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          <div
+            className="flex h-full w-full items-center justify-center"
+            style={{ display: exercise.thumbnailUrl ? 'none' : 'flex' }}
+          >
+            {exercise.videoUrl ? (
+              <PlayCircle size={32} className="text-tape/80 transition-transform group-hover:scale-110" />
+            ) : (
+              <Dumbbell size={28} />
+            )}
+          </div>
         </div>
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="font-display text-xl tracking-wide text-chalk">{exercise.name}</h3>
