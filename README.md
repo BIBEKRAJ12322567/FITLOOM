@@ -129,9 +129,21 @@ The AI workout generator follows a retrieval-then-generate pattern: `Exercise` d
 
 ## 🗺️ Project Status
 
-**Fully built and tested end-to-end:** authentication, the AI workout generator (confirmed working with a live Gemini call), the calculator suite, and the full page/routing/component structure of the frontend.
+**Fully built and tested end-to-end:**
+- Authentication (register/login/logout, refresh-token rotation, RBAC across `user`/`trainer`/`gym_owner`/`gym_staff`/`admin`)
+- AI Workout Generator — retrieval-then-generate pattern with candidate pre-filtering and post-generation ID validation
+- AI Diet Plan Generator — calorie/macro targets computed deterministically server-side (Mifflin-St Jeor); AI only designs meals within those fixed numbers
+- Full calculator suite (BMI, Calories/TDEE, Body Fat), formulas verified against reference values
+- Offline Gym system — gym owners run a tabbed management dashboard (Overview/Members/Plans/Products/Leaderboard); members browse/join/renew/review gyms and buy from a gym's supplement store. Two-tier tenant isolation (`resolveTenant` for staff, `withGymParam` for members) both enforced through the same `tenantScopePlugin`
+- Exercise Library — searchable/filterable with detail pages. Thumbnails sourced from [wger.de](https://wger.de) (CC-BY-SA 4.0); 8/20 seeded exercises have real images, the rest use an icon placeholder because those specific entries have no image in wger's own dataset
+- Workout logging + Progress — set/rep/weight logging, streak tracking (tested against date-boundary edge cases), training-volume trend chart, and an explainable progressive-overload suggestion
 
-**Not yet built:** exercise-name resolution for AI-generated plans (currently displays exercise IDs), and several placeholder pages (exercise library, progress charts, diet planner, in-app trainer marketplace) that are routed and styled but not yet populated with real logic.
+**Deliberately deferred, not yet built:**
+- Real payment gateway (currently a mock "instantly captured" function in `backend/src/services/paymentService.js`)
+- Renewal reminder messages (needs Redis/BullMQ, not set up)
+- Gym staff permissions (only the gym owner can currently manage a gym)
+- Several public marketing pages and in-app Trainers booking (still `ComingSoon` placeholders)
+- Profile editing (view-only for now, no edit form)
 
 ## 🤝 Contributing
 
