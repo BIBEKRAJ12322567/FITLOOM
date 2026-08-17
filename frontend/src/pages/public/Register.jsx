@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Dumbbell } from 'lucide-react';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
@@ -10,11 +10,18 @@ const ROLES = [
   { value: 'trainer', label: 'Trainer' },
   { value: 'gym_owner', label: 'Gym owner' },
 ];
+const VALID_ROLE_VALUES = ROLES.map((r) => r.value);
  
 export default function Register() {
   const { register, loading } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'user' });
+  const [searchParams] = useSearchParams();
+  // Lets links like /register?role=gym_owner (e.g. the "I run a gym" page)
+  // land with that role pre-selected. Falls back to 'user' for anything
+  // missing or not a valid registerable role.
+  const requestedRole = searchParams.get('role');
+  const initialRole = VALID_ROLE_VALUES.includes(requestedRole) ? requestedRole : 'user';
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: initialRole });
   const [formError, setFormError] = useState('');
  
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -34,7 +41,10 @@ export default function Register() {
  
     try {
       await register({ name: form.name, email: form.email, password: form.password, role: form.role });
-      navigate('/app/dashboard', { replace: true });
+      // Gym owners have nowhere to go from the generic member dashboard —
+      // send them straight to where they register their gym.
+      const destination = form.role === 'gym_owner' ? '/app/owner' : '/app/dashboard';
+      navigate(destination, { replace: true });
     } catch (err) {
       setFormError(err.message);
     }
@@ -121,4 +131,3 @@ export default function Register() {
     </div>
   );
 }
- 
