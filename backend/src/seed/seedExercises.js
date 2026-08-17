@@ -15,45 +15,138 @@ const config = require('../config/env');
 const Exercise = require('../models/Exercise');
 
 /**
- * Fetches a real exercise thumbnail from wger.de — a free, open-source
+ * Fetches real exercise thumbnails from wger.de — a free, open-source
  * fitness database (CC-BY-SA 4.0 licensed, public API, no auth required).
  * https://wger.de
  *
- * IMPORTANT: this call was written against wger's documented API shape but
- * has NOT been tested against the live API (this project's sandbox can't
- * reach wger.de). It's defensively coded — any failure (network, unexpected
- * response shape, no match found) falls back to `null` and the seed
- * continues normally with the icon placeholder, it never crashes the seed.
- * Watch the console output when you run this — it'll tell you exactly
- * which exercises got a real image and which didn't.
+ * NOTE ON HOW THIS WAS ARRIVED AT — two earlier attempts failed, both
+ * confirmed with real live API calls (not guesses):
+ *   1. Base /api/v2/exercise/ list has no flat "name" field (names live on
+ *      a separate translation object) — confirmed 0/20 match live.
+ *   2. /api/v2/exercise/search/?term=... does not exist on the live API —
+ *      confirmed via the real /api/v2/?format=json root listing, which has
+ *      no "search" key, and a direct hit on that URL returned
+ *      {"detail":"Not found."}.
+ *   3. /api/v2/exercise-translation/?name__icontains=X&language=2 is a real
+ *      endpoint, but the name filter is silently IGNORED by the live API —
+ *      confirmed because the result count (3319) and returned rows were
+ *      identical to the fully unfiltered call, and returned names had
+ *      nothing to do with the search term.
+ *
+ * Working approach (server-side filtering is not usable at all): pull every
+ * English (language=2) translation once via pagination, build an in-memory
+ * name -> exercise-id index, then match all 20 local exercise names against
+ * it client-side. language=2 as a query param DOES work (confirmed: every
+ * row in a language=2 call had "language":2).
  */
-async function fetchWgerThumbnail(exerciseName) {
+async function loadWgerTranslationIndex() {
+  const index = new Map(); // lowercased translation name -> exercise id
+  let url = 'https://wger.de/api/v2/exercise-translation/?language=2&limit=200&format=json';
+  let pagesFetched = 0;
+  const MAX_PAGES = 25; // safety cap (~5000 rows) — real total is ~3319
+
+  while (url && pagesFetched < MAX_PAGES) {
+    const res = await fetch(url);
+    if (!res.ok) break;
+    const data = await res.json();
+
+    for (const t of data.results || []) {
+      if (t.name && t.exercise) {
+        const key = t.name.toLowerCase().trim();
+        if (!index.has(key)) index.set(key, t.exercise);
+      }
+    }
+
+    url = data.next || null;
+    pagesFetched += 1;
+  }
+
+  return index;
+}
+
+const STOPWORDS = new Set(['a', 'an', 'the', 'with', 'on', 'in', 'of', 'to', 'and']);
+
+function tokenize(name) {
+  return name
+    .toLowerCase()
+    .replace(/[()]/g, ' ')
+    .split(/[\s\-_/]+/)
+    .filter((w) => w.length > 0 && !STOPWORDS.has(w));
+}
+
+// naive singularizer — good enough to bridge "Squat" vs wger's "Squats"
+function singularize(word) {
+  if (word.endsWith('ies')) return word.slice(0, -3) + 'y';
+  if (word.endsWith('es')) return word.slice(0, -2);
+  if (word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
+function findExerciseIdByName(index, exerciseName) {
+  const target = exerciseName.toLowerCase().trim();
+
+  // Tier 1: exact match
+  if (index.has(target)) return index.get(target);
+
+  const targetWords = tokenize(exerciseName);
+
+  // Tier 2: strict word-overlap match — ALL of the local exercise's
+  // significant words must appear in the candidate (singular/plural
+  // tolerant), preferring the tightest (fewest extra words) candidate.
+  // This catches cases like local "Squat" vs wger's "Squats", or word-order
+  // differences, without risking false positives from partial overlap.
+  if (targetWords.length > 0) {
+    let bestId = null;
+    let bestCandidateWordCount = Infinity;
+
+    for (const [candidateName, exerciseId] of index) {
+      const candidateWords = tokenize(candidateName);
+      if (candidateWords.length === 0) continue;
+
+      const allWordsPresent = targetWords.every((tw) => {
+        if (candidateWords.includes(tw)) return true;
+        const twSing = singularize(tw);
+        return candidateWords.some((cw) => singularize(cw) === twSing);
+      });
+
+      if (allWordsPresent && candidateWords.length < bestCandidateWordCount) {
+        bestId = exerciseId;
+        bestCandidateWordCount = candidateWords.length;
+      }
+    }
+
+    if (bestId !== null) return bestId;
+  }
+
+  // Tier 3: old substring fallback (kept as a safety net so anything that
+  // matched before this change still matches now — never a regression).
+  // Picks the longest/most specific matching candidate rather than the
+  // first one encountered, so a partial match like "dip" doesn't win over
+  // a closer one like "tricep dips" when neither is a perfect tier-2 match.
+  let bestSubstringId = null;
+  let bestSubstringLength = -1;
+  for (const [candidateName, exerciseId] of index) {
+    if (candidateName.includes(target) || target.includes(candidateName)) {
+      if (candidateName.length > bestSubstringLength) {
+        bestSubstringId = exerciseId;
+        bestSubstringLength = candidateName.length;
+      }
+    }
+  }
+  return bestSubstringId;
+}
+
+async function fetchWgerImageForExerciseId(exerciseId) {
   try {
-    // wger's base exercise list, English only, first 200 results — enough
-    // to cover common compound/isolation lifts. Client-side name matching
-    // avoids depending on wger's search-endpoint response shape, which
-    // isn't fully documented publicly.
-    const listRes = await fetch('https://wger.de/api/v2/exercise/?language=2&limit=200&format=json');
-    if (!listRes.ok) return null;
-    const listData = await listRes.json();
-
-    const nameLower = exerciseName.toLowerCase();
-    const match = listData.results?.find(
-      (ex) => ex.name && (ex.name.toLowerCase().includes(nameLower) || nameLower.includes(ex.name.toLowerCase()))
+    const imgRes = await fetch(
+      `https://wger.de/api/v2/exerciseimage/?exercise=${exerciseId}&is_main=True&format=json`
     );
-    if (!match) return null;
-
-    const exerciseId = match.id || match.base_id || match.exercise_base;
-    if (!exerciseId) return null;
-
-    const imgRes = await fetch(`https://wger.de/api/v2/exerciseimage/?exercise=${exerciseId}&is_main=True&format=json`);
     if (!imgRes.ok) return null;
     const imgData = await imgRes.json();
 
     const image = imgData.results?.[0];
     return image?.thumbnails?.medium || image?.image || null;
   } catch (err) {
-    console.warn(`  (wger lookup failed for "${exerciseName}": ${err.message})`);
     return null;
   }
 }
@@ -253,16 +346,28 @@ async function seed() {
     return;
   }
 
-  console.log('Looking up real thumbnails from wger.de for each exercise (this may take a minute)...');
+  console.log('Building wger.de exercise name index (paginating English translations)...');
+  let wgerIndex = new Map();
+  try {
+    wgerIndex = await loadWgerTranslationIndex();
+    console.log(`  Indexed ${wgerIndex.size} unique exercise names from wger.de.`);
+  } catch (err) {
+    console.warn(`  wger.de index build failed (${err.message}) — continuing with icon placeholders for all exercises.`);
+  }
+
+  console.log('Matching local exercises against the index and fetching images...');
   let matchedCount = 0;
   for (const exercise of exercises) {
-    const thumbnailUrl = await fetchWgerThumbnail(exercise.name);
+    const exerciseId = findExerciseIdByName(wgerIndex, exercise.name);
+    const thumbnailUrl = exerciseId ? await fetchWgerImageForExerciseId(exerciseId) : null;
     if (thumbnailUrl) {
       exercise.thumbnailUrl = thumbnailUrl;
       matchedCount += 1;
       console.log(`  ✓ ${exercise.name} — found image`);
+    } else if (exerciseId) {
+      console.log(`  – ${exercise.name} — matched exercise #${exerciseId} but it has no image, will use icon placeholder`);
     } else {
-      console.log(`  – ${exercise.name} — no match, will use icon placeholder`);
+      console.log(`  – ${exercise.name} — no name match, will use icon placeholder`);
     }
   }
   console.log(`Matched ${matchedCount}/${exercises.length} exercises with a real thumbnail from wger.de.`);
