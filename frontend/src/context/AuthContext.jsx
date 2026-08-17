@@ -60,9 +60,27 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  const updateProfile = useCallback(async (profilePayload) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.updateProfile(profilePayload);
+      // /auth/me/profile only returns { user }, no tokens — reuse persistSession,
+      // it already no-ops on the missing accessToken key.
+      persistSession(data);
+      return data;
+    } catch (err) {
+      const message = err.response?.data?.error?.message || 'Could not update profile.';
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, loading, error, login, register, logout }),
-    [user, loading, error, login, register, logout]
+    () => ({ user, isAuthenticated: !!user, loading, error, login, register, logout, updateProfile }),
+    [user, loading, error, login, register, logout, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

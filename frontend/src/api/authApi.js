@@ -5,4 +5,5 @@ export const authApi = {
   login: (payload) => apiClient.post('/auth/login', payload).then((r) => r.data),
   logout: () => apiClient.post('/auth/logout').then((r) => r.data),
   me: () => apiClient.get('/auth/me').then((r) => r.data),
+  updateProfile: (payload) => apiClient.patch('/auth/me/profile', payload).then((r) => r.data),
 };

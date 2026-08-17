@@ -6,6 +6,7 @@ const {
   registerValidators,
   loginValidators,
   refreshValidators,
+  profileUpdateValidators,
 } = require('../validators/authValidators');
 
 const router = express.Router();
@@ -16,5 +17,6 @@ router.post('/refresh', refreshValidators, authController.refresh);
 router.post('/logout', authController.logout); // refreshToken revoked; no access-token check needed to log out
 router.post('/logout-all', authenticate, authController.logoutAll);
 router.get('/me', authenticate, authController.me);
+router.patch('/me/profile', authenticate, profileUpdateValidators, authController.updateProfile);
 
 module.exports = router;

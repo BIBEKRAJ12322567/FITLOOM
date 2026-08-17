@@ -81,4 +81,40 @@ async function me(req, res, next) {
   }
 }
 
-module.exports = { register, login, refresh, logout, logoutAll, me };
+// Fields of the embedded `profile` subdocument a user may edit about
+// themselves. Deliberately excludes email/password/role/subscriptionTier/
+// gamification — those aren't part of this form and shouldn't become
+// editable just because a client sends them.
+const EDITABLE_PROFILE_FIELDS = [
+  'name',
+  'avatarUrl',
+  'dob',
+  'gender',
+  'heightCm',
+  'weightKg',
+  'goals',
+  'injuries',
+  'experienceLevel',
+];
+
+async function updateProfile(req, res, next) {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      throw new AppError('User not found', 404, 'NOT_FOUND');
+    }
+
+    for (const field of EDITABLE_PROFILE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        user.profile[field] = req.body[field];
+      }
+    }
+
+    await user.save();
+    res.status(200).json({ user });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { register, login, refresh, logout, logoutAll, me, updateProfile };
