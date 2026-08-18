@@ -46,16 +46,26 @@ const NAV_SECTIONS = [
 export default function Sidebar({ open, onClose }) {
   const { user } = useAuth();
   const isGymOwner = user?.role === 'gym_owner';
+  const isTrainer = user?.role === 'trainer';
 
-  const sections = isGymOwner
-    ? [
-        ...NAV_SECTIONS,
-        {
-          label: 'Manage',
-          items: [{ to: '/app/owner', label: 'Gym Management', icon: Settings }],
-        },
-      ]
-    : NAV_SECTIONS;
+  let sections = NAV_SECTIONS;
+  if (isGymOwner) {
+    sections = [
+      ...NAV_SECTIONS,
+      {
+        label: 'Manage',
+        items: [{ to: '/app/owner', label: 'Gym Management', icon: Settings }],
+      },
+    ];
+  } else if (isTrainer) {
+    sections = [
+      ...NAV_SECTIONS,
+      {
+        label: 'Manage',
+        items: [{ to: '/app/trainer-studio', label: 'Trainer Studio', icon: Settings }],
+      },
+    ];
+  }
 
   return (
     <>

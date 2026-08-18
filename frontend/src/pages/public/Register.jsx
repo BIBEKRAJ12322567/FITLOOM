@@ -41,9 +41,10 @@ export default function Register() {
  
     try {
       await register({ name: form.name, email: form.email, password: form.password, role: form.role });
-      // Gym owners have nowhere to go from the generic member dashboard —
-      // send them straight to where they register their gym.
-      const destination = form.role === 'gym_owner' ? '/app/owner' : '/app/dashboard';
+      // Gym owners and trainers have nowhere useful to go from the generic
+      // member dashboard — send them straight to their own setup page.
+      const destinations = { gym_owner: '/app/owner', trainer: '/app/trainer-studio' };
+      const destination = destinations[form.role] || '/app/dashboard';
       navigate(destination, { replace: true });
     } catch (err) {
       setFormError(err.message);

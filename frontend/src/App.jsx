@@ -31,6 +31,8 @@ import GymDetail from './pages/user/gyms/GymDetail';
 import GymStore from './pages/user/gyms/GymStore';
 import OwnerDashboard from './pages/user/OwnerDashboard';
 import UserTrainers from './pages/user/Trainers';
+import TrainerDetail from './pages/user/TrainerDetail';
+import TrainerStudio from './pages/user/TrainerStudio';
 import Profile from './pages/user/Profile';
 
 export default function App() {
@@ -73,6 +75,8 @@ export default function App() {
         <Route path="gyms/:gymId/store" element={<GymStore />} />
         <Route path="owner" element={<OwnerDashboard />} />
         <Route path="trainers" element={<UserTrainers />} />
+        <Route path="trainers/:trainerId" element={<TrainerDetail />} />
+        <Route path="trainer-studio" element={<TrainerStudio />} />
         <Route path="profile" element={<Profile />} />
       </Route>
 
