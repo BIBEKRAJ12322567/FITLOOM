@@ -28,6 +28,9 @@ const router = express.Router();
 // --- Registration & browsing ---
 router.post('/', authenticate, registerGymValidators, gymController.registerGym);
 router.get('/', authenticate, listGymsValidators, gymController.listGyms);
+// MUST be registered before '/:gymId' below, or Express treats "mine" as a
+// literal gymId value — same trap as exerciseRoutes.js's /batch route.
+router.get('/mine', authenticate, gymController.getMyGyms);
 router.get('/:gymId', authenticate, withGymParam, gymController.getGymDetail);
 
 // --- Owner dashboard (requires ownership) ---

@@ -201,6 +201,24 @@ async function getGymLeaderboard(req, res, next) {
     next(err);
   }
 }
+/**
+ * GET /api/gyms/mine — the logged-in user's own gyms (as owner). Consumed
+ * by MyGym.jsx (shows "gyms you own") and OwnerDashboard.jsx (auto-selects
+ * a gym to manage when no ?gymId is present in the URL). Both were already
+ * calling gymApi.listMine() -> GET /gyms/mine before this route existed,
+ * which meant it fell through to GET /gyms/:gymId with gymId="mine" and
+ * threw a Mongoose CastError — a real bug, not a hypothetical one.
+ */
+async function getMyGyms(req, res, next) {
+  try {
+    const gyms = await Gym.find({ ownerId: req.user.id })
+      .select('name slug address logoUrl subscriptionPlan subscriptionStatus')
+      .lean();
+    res.status(200).json({ gyms });
+  } catch (err) {
+    next(err);
+  }
+}
 
 module.exports = {
   registerGym,
@@ -209,4 +227,5 @@ module.exports = {
   getGymOverview,
   getGymMembers,
   getGymLeaderboard,
+  getMyGyms,
 };
