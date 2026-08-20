@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Salad, Loader2, AlertCircle, Flame } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Salad, Loader2, AlertCircle, Flame, History, ChevronDown, ChevronUp } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { aiApi } from '../../api/aiApi';
+import { dietApi } from '../../api/dietApi';
 
 const GOALS = [
   { value: 'weight_loss', label: 'Weight loss' },
@@ -44,6 +45,21 @@ export default function DietPlan() {
   const [errorMessage, setErrorMessage] = useState('');
   const [plan, setPlan] = useState(null);
   const [meta, setMeta] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    dietApi
+      .listMyPlans()
+      .then(setHistory)
+      .catch(() => {}); // history is a nice-to-have — a failed fetch shouldn't block the generator form
+  }, []);
+
+  const handleViewPastPlan = (pastPlan) => {
+    setPlan(pastPlan);
+    setMeta(null); // meta (deviationPct etc.) only exists for a just-generated plan, not a saved one
+    setStatus('success');
+  };
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -67,6 +83,7 @@ export default function DietPlan() {
       setPlan(data.dietPlan);
       setMeta(data.meta);
       setStatus('success');
+      setHistory((h) => [data.dietPlan, ...h]);
     } catch (err) {
       setStatus('error');
       setErrorMessage(
@@ -236,6 +253,41 @@ export default function DietPlan() {
           </Button>
         </form>
       </Card>
+
+      {history.length > 0 && (
+        <Card className="mt-5">
+          <button
+            onClick={() => setHistoryOpen((o) => !o)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <span className="flex items-center gap-2 font-semibold text-chalk">
+              <History size={16} className="text-tape" /> Past plans ({history.length})
+            </span>
+            {historyOpen ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
+          </button>
+          {historyOpen && (
+            <div className="mt-3 space-y-2">
+              {history.map((p) => (
+                <div
+                  key={p._id}
+                  className="flex items-center justify-between gap-3 rounded-lg bg-raised px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-chalk">{p.title}</p>
+                    <p className="text-xs capitalize text-muted">
+                      {p.goal.replace('_', ' ')} · {p.dailyCalorieTarget} kcal ·{' '}
+                      {new Date(p.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => handleViewPastPlan(p)}>
+                    View
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {status === 'error' && (
         <div className="mt-5 flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">

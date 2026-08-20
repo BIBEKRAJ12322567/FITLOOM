@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Sparkles, Loader2, AlertCircle, History, ChevronDown, ChevronUp } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { aiApi } from '../../api/aiApi';
+import { workoutApi } from '../../api/workoutApi';
 import { exerciseApi } from '../../api/exerciseApi';
  
 const GOALS = [
@@ -23,6 +24,40 @@ export default function AICoach() {
   const [plan, setPlan] = useState(null);
   const [meta, setMeta] = useState(null);
   const [exercisesById, setExercisesById] = useState({});
+  const [history, setHistory] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [loadingPlanId, setLoadingPlanId] = useState(null);
+
+  // Resolve a plan's exerciseIds to real names/muscle groups in one
+  // batched call — shared by both a fresh generation and clicking into a
+  // past plan from history, since either path needs the same lookup.
+  const resolveExercises = useCallback(async (workoutPlan) => {
+    const ids = [...new Set(workoutPlan.days.flatMap((day) => day.exercises.map((ex) => ex.exerciseId)))];
+    if (ids.length === 0) return;
+    try {
+      const resolved = await exerciseApi.getByIds(ids);
+      setExercisesById(resolved);
+    } catch {
+      // Non-fatal — the plan itself already displays; worst case exercise
+      // names fall back to a generic label below.
+    }
+  }, []);
+
+  useEffect(() => {
+    workoutApi
+      .listMyPlans()
+      .then(setHistory)
+      .catch(() => {}); // history is a nice-to-have — a failed fetch shouldn't block the generator form
+  }, []);
+
+  const handleViewPastPlan = async (pastPlan) => {
+    setLoadingPlanId(pastPlan._id);
+    setPlan(pastPlan);
+    setMeta(null); // meta (droppedExercises etc.) only exists for a just-generated plan, not a saved one
+    setStatus('success');
+    await resolveExercises(pastPlan);
+    setLoadingPlanId(null);
+  };
  
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
  
@@ -41,27 +76,13 @@ export default function AICoach() {
       setPlan(data.workoutPlan);
       setMeta(data.meta);
       setStatus('success');
+      setHistory((h) => [data.workoutPlan, ...h]);
       // Let the Dashboard surface this without a second fetch — see the
       // comment in Dashboard.jsx for why sessionStorage is a pragmatic
       // stand-in here rather than a real "recent plans" endpoint.
       sessionStorage.setItem('latestWorkoutPlan', JSON.stringify(data.workoutPlan));
- 
-      // The plan only carries exerciseIds — resolve them to real names/muscle
-      // groups in one batched call rather than N individual lookups.
-      const ids = [
-        ...new Set(
-          data.workoutPlan.days.flatMap((day) => day.exercises.map((ex) => ex.exerciseId))
-        ),
-      ];
-      if (ids.length > 0) {
-        try {
-          const resolved = await exerciseApi.getByIds(ids);
-          setExercisesById(resolved);
-        } catch {
-          // Non-fatal — the plan itself already succeeded and is displayed;
-          // worst case exercise names fall back to a generic label below.
-        }
-      }
+
+      await resolveExercises(data.workoutPlan);
     } catch (err) {
       setStatus('error');
       setErrorMessage(
@@ -166,7 +187,46 @@ export default function AICoach() {
           </Button>
         </form>
       </Card>
- 
+
+      {history.length > 0 && (
+        <Card className="mt-5">
+          <button
+            onClick={() => setHistoryOpen((o) => !o)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <span className="flex items-center gap-2 font-semibold text-chalk">
+              <History size={16} className="text-tape" /> Past plans ({history.length})
+            </span>
+            {historyOpen ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
+          </button>
+          {historyOpen && (
+            <div className="mt-3 space-y-2">
+              {history.map((p) => (
+                <div
+                  key={p._id}
+                  className="flex items-center justify-between gap-3 rounded-lg bg-raised px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-chalk">{p.title}</p>
+                    <p className="text-xs capitalize text-muted">
+                      {p.goal.replace('_', ' ')} · {p.level} · {new Date(p.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={loadingPlanId === p._id}
+                    onClick={() => handleViewPastPlan(p)}
+                  >
+                    {loadingPlanId === p._id ? 'Loading…' : 'View'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {status === 'error' && (
         <div className="mt-5 flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -235,4 +295,3 @@ export default function AICoach() {
     </div>
   );
 }
- 
