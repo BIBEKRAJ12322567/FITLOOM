@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Gym, User, Membership, MembershipPlan, Attendance, Payment } = require('../models');
+const { Gym, User, Membership, MembershipPlan, Attendance, Payment, GymStaffMember } = require('../models');
 const AppError = require('../utils/AppError');
 
 function slugify(name) {
@@ -202,19 +202,36 @@ async function getGymLeaderboard(req, res, next) {
   }
 }
 /**
- * GET /api/gyms/mine — the logged-in user's own gyms (as owner). Consumed
- * by MyGym.jsx (shows "gyms you own") and OwnerDashboard.jsx (auto-selects
- * a gym to manage when no ?gymId is present in the URL). Both were already
- * calling gymApi.listMine() -> GET /gyms/mine before this route existed,
- * which meant it fell through to GET /gyms/:gymId with gymId="mine" and
- * threw a Mongoose CastError — a real bug, not a hypothetical one.
+ * GET /api/gyms/mine — every gym this user has management access to,
+ * whether as owner or as a delegated staff account. Was owner-only until
+ * now (see the gym_staff feature this ships alongside) — a staffer would
+ * get an empty list here and never see their own dashboard.
+ *
+ * Each entry carries `myRole` ('owner' | 'staff') and, for staff, the
+ * exact `myPermissions` granted — the frontend uses this to show/hide
+ * dashboard tabs without a separate round-trip per tab.
  */
 async function getMyGyms(req, res, next) {
   try {
-    const gyms = await Gym.find({ ownerId: req.user.id })
-      .select('name slug address logoUrl subscriptionPlan subscriptionStatus')
-      .lean();
-    res.status(200).json({ gyms });
+    const [ownedGyms, staffRecords] = await Promise.all([
+      Gym.find({ ownerId: req.user.id })
+        .select('name slug address logoUrl subscriptionPlan subscriptionStatus')
+        .lean(),
+      GymStaffMember.find({ userId: req.user.id, status: 'active' })
+        .setOptions({ skipTenantScope: true })
+        .populate('gymId', 'name slug address logoUrl subscriptionPlan subscriptionStatus')
+        .lean(),
+    ]);
+
+    const owned = ownedGyms.map((gym) => ({ ...gym, myRole: 'owner', myPermissions: null }));
+
+    // A staff record's gymId is populated with the full Gym doc; skip any
+    // record whose gym was since deleted rather than crashing the response.
+    const staffed = staffRecords
+      .filter((rec) => rec.gymId)
+      .map((rec) => ({ ...rec.gymId, myRole: 'staff', myPermissions: rec.permissions }));
+
+    res.status(200).json({ gyms: [...owned, ...staffed] });
   } catch (err) {
     next(err);
   }

@@ -9,19 +9,28 @@ import {
   Package,
   Plus,
   Loader2,
+  ShieldCheck,
+  Trash2,
+  Mail,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import Badge from '../../components/ui/Badge';
 import KpiCard from '../../components/ui/KpiCard';
-import { gymApi } from '../../api/gymApi';
+import { gymApi, STAFF_PERMISSIONS } from '../../api/gymApi';
 
+// Each tab lists the permission that unlocks it for a delegated staff
+// account. `null` means it's open to anyone with dashboard access
+// (leaderboard is already a non-sensitive, non-owner-gated backend route).
+// 'owner' means it's never delegable, regardless of permissions granted.
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'members', label: 'Members' },
-  { id: 'plans', label: 'Plans' },
-  { id: 'products', label: 'Products' },
-  { id: 'leaderboard', label: 'Leaderboard' },
+  { id: 'overview', label: 'Overview', permission: 'view_overview' },
+  { id: 'members', label: 'Members', permission: 'manage_members' },
+  { id: 'plans', label: 'Plans', permission: 'manage_plans' },
+  { id: 'products', label: 'Products', permission: 'manage_products' },
+  { id: 'leaderboard', label: 'Leaderboard', permission: null },
+  { id: 'staff', label: 'Staff', permission: 'owner' },
 ];
 
 function RegisterGymForm({ onRegistered }) {
@@ -194,11 +203,189 @@ function AddProductForm({ gymId, onAdded }) {
   );
 }
 
+function InviteStaffForm({ gymId, onInvited }) {
+  const [email, setEmail] = useState('');
+  const [permissions, setPermissions] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const togglePermission = (value) => {
+    setPermissions((p) => (p.includes(value) ? p.filter((v) => v !== value) : [...p, value]));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (permissions.length === 0) {
+      setError('Grant at least one permission.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await gymApi.inviteStaff(gymId, { email: email.trim(), permissions });
+      setEmail('');
+      setPermissions([]);
+      onInvited();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Could not invite that person.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <Input
+        label="Staff member's email"
+        type="email"
+        placeholder="them@example.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
+      <p className="text-xs text-muted">
+        They need an existing FitLoom account — ask them to register first if they don't have one.
+      </p>
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-muted">Permissions</label>
+        <div className="flex flex-wrap gap-2">
+          {STAFF_PERMISSIONS.map((perm) => (
+            <button
+              type="button"
+              key={perm.value}
+              onClick={() => togglePermission(perm.value)}
+              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                permissions.includes(perm.value)
+                  ? 'border-tape bg-tape/15 text-tape'
+                  : 'border-steel bg-raised text-muted hover:text-chalk'
+              }`}
+            >
+              {perm.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <Button type="submit" size="sm" disabled={submitting} className="gap-1.5">
+        <Mail size={14} /> {submitting ? 'Inviting…' : 'Invite'}
+      </Button>
+    </form>
+  );
+}
+
+function StaffRow({ member, gymId, onChanged }) {
+  const [busy, setBusy] = useState(false);
+
+  const togglePermission = async (value) => {
+    setBusy(true);
+    try {
+      const next = member.permissions.includes(value)
+        ? member.permissions.filter((v) => v !== value)
+        : [...member.permissions, value];
+      if (next.length === 0) return; // keep at least one permission; use Revoke to fully remove
+      await gymApi.updateStaffPermissions(gymId, member._id, next);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revoke = async () => {
+    setBusy(true);
+    try {
+      await gymApi.removeStaff(gymId, member._id);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold text-chalk">
+            {member.userId?.profile?.name || member.userId?.email}
+          </p>
+          <p className="text-xs text-muted">{member.userId?.email}</p>
+        </div>
+        <Button variant="danger" size="sm" onClick={revoke} disabled={busy} className="gap-1.5">
+          <Trash2 size={13} /> Revoke
+        </Button>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {STAFF_PERMISSIONS.map((perm) => {
+          const active = member.permissions.includes(perm.value);
+          return (
+            <button
+              key={perm.value}
+              type="button"
+              disabled={busy}
+              onClick={() => togglePermission(perm.value)}
+              className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                active
+                  ? 'border-tape bg-tape/15 text-tape'
+                  : 'border-steel bg-raised text-muted hover:text-chalk'
+              }`}
+            >
+              {perm.label}
+            </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function StaffTab({ gymId }) {
+  const [staff, setStaff] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    gymApi
+      .listStaff(gymId)
+      .then(setStaff)
+      .finally(() => setLoading(false));
+  }, [gymId]);
+
+  useEffect(load, [load]);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="mb-3 flex items-center gap-2">
+          <ShieldCheck size={18} className="text-tape" />
+          <h3 className="font-semibold text-chalk">Invite staff</h3>
+        </div>
+        <InviteStaffForm gymId={gymId} onInvited={load} />
+      </Card>
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-muted">
+          <Loader2 size={16} className="animate-spin" /> Loading…
+        </div>
+      ) : staff.filter((s) => s.status === 'active').length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted">No delegated staff yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {staff
+            .filter((s) => s.status === 'active')
+            .map((member) => (
+              <StaffRow key={member._id} member={member} gymId={gymId} onChanged={load} />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OwnerDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [resolving, setResolving] = useState(true);
   const [gymId, setGymId] = useState(searchParams.get('gymId'));
   const [activeTab, setActiveTab] = useState('overview');
+  const [myGyms, setMyGyms] = useState([]);
 
   const [overview, setOverview] = useState(null);
   const [members, setMembers] = useState([]);
@@ -207,23 +394,45 @@ export default function OwnerDashboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [tabLoading, setTabLoading] = useState(false);
 
-  // Resolve which gym to manage: use the URL param if present, otherwise
-  // check if the user owns exactly one gym and auto-select it.
+  // Always fetch listMine — even when gymId already came from the URL —
+  // because it's how we learn whether the current user is this gym's
+  // owner (full access) or a delegated staffer (access limited to
+  // myPermissions), which decides which tabs render at all.
   useEffect(() => {
-    if (gymId) {
-      setResolving(false);
-      return;
-    }
     gymApi
       .listMine()
       .then((gyms) => {
-        if (gyms.length > 0) {
+        setMyGyms(gyms);
+        if (!gymId && gyms.length > 0) {
           setGymId(gyms[0]._id);
           setSearchParams({ gymId: gyms[0]._id });
         }
       })
       .finally(() => setResolving(false));
-  }, [gymId, setSearchParams]);
+    // Only run once on mount / when the URL's gymId first resolves — myGyms
+    // itself doesn't need to change if the user just switches tabs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const myAccess = myGyms.find((g) => g._id === gymId);
+  const isOwner = myAccess?.myRole === 'owner';
+  const myPermissions = myAccess?.myPermissions || [];
+
+  const visibleTabs = TABS.filter((tab) => {
+    if (tab.permission === 'owner') return isOwner;
+    if (tab.permission === null) return true;
+    return isOwner || myPermissions.includes(tab.permission);
+  });
+
+  // If the current tab isn't visible once access is known (e.g. a staffer
+  // without view_overview lands on the default 'overview' tab), fall back
+  // to the first tab they actually have access to.
+  useEffect(() => {
+    if (myAccess && !visibleTabs.some((t) => t.id === activeTab) && visibleTabs.length > 0) {
+      setActiveTab(visibleTabs[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myAccess, activeTab]);
 
   const loadTabData = useCallback(async () => {
     if (!gymId) return;
@@ -234,14 +443,15 @@ export default function OwnerDashboard() {
       if (activeTab === 'plans') setPlans(await gymApi.listPlans(gymId));
       if (activeTab === 'products') setProducts(await gymApi.listProducts(gymId));
       if (activeTab === 'leaderboard') setLeaderboard(await gymApi.getLeaderboard(gymId));
+      // 'staff' tab manages its own data fetching in <StaffTab>.
     } finally {
       setTabLoading(false);
     }
   }, [gymId, activeTab]);
 
   useEffect(() => {
-    loadTabData();
-  }, [loadTabData]);
+    if (activeTab !== 'staff') loadTabData();
+  }, [loadTabData, activeTab]);
 
   if (resolving) {
     return (
@@ -264,10 +474,15 @@ export default function OwnerDashboard() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <h1 className="font-display text-3xl tracking-wide text-chalk">GYM MANAGEMENT</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="font-display text-3xl tracking-wide text-chalk">GYM MANAGEMENT</h1>
+        {myAccess && (
+          <Badge tone={isOwner ? 'tape' : 'neutral'}>{isOwner ? 'Owner' : 'Staff'}</Badge>
+        )}
+      </div>
 
       <div className="flex gap-1 overflow-x-auto border-b border-steel">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -374,6 +589,8 @@ export default function OwnerDashboard() {
           )}
         </Card>
       )}
+
+      {activeTab === 'staff' && isOwner && <StaffTab gymId={gymId} />}
     </div>
   );
 }

@@ -45,11 +45,11 @@ const NAV_SECTIONS = [
 
 export default function Sidebar({ open, onClose }) {
   const { user } = useAuth();
-  const isGymOwner = user?.role === 'gym_owner';
+  const canManageGym = user?.role === 'gym_owner' || user?.role === 'gym_staff';
   const isTrainer = user?.role === 'trainer';
 
   let sections = NAV_SECTIONS;
-  if (isGymOwner) {
+  if (canManageGym) {
     sections = [
       ...NAV_SECTIONS,
       {

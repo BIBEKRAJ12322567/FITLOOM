@@ -10,6 +10,7 @@ module.exports = {
   DietPlan: require('./DietPlan'),
   TrainerProfile: require('./TrainerProfile'),
   GymTrainer: require('./GymTrainer'),
+  GymStaffMember: require('./GymStaffMember'),
   TrainerBooking: require('./TrainerBooking'),
   Product: require('./Product'),
   Order: require('./Order'),
