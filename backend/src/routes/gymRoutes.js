@@ -8,6 +8,7 @@ const membershipController = require('../controllers/membershipController');
 const storeController = require('../controllers/storeController');
 const reviewController = require('../controllers/reviewController');
 const staffController = require('../controllers/staffController');
+const attendanceController = require('../controllers/attendanceController');
 const {
   registerGymValidators,
   listGymsValidators,
@@ -58,6 +59,32 @@ router.get(
   gymController.getGymMembers
 );
 router.get('/:gymId/leaderboard', authenticate, withGymParam, gymController.getGymLeaderboard);
+
+// --- Attendance ---
+// Self-service check-in/out: any member with an active membership here
+// (checked inside the controller, not via requireGymPermission — this
+// isn't a dashboard-management action). The QR code shown at the front
+// desk just encodes GET .../checkin?gymId=... on the frontend, which
+// calls this on load — "scanning" the code IS hitting this endpoint.
+router.post('/:gymId/attendance/check-in', authenticate, withGymParam, attendanceController.checkIn);
+router.post('/:gymId/attendance/check-out', authenticate, withGymParam, attendanceController.checkOut);
+router.get('/:gymId/attendance/mine', authenticate, withGymParam, attendanceController.listMyAttendance);
+// Staff/owner actions — gated by manage_attendance, the permission this
+// feature exists to give meaning to (see GymStaffMember/requireGymPermission).
+router.get(
+  '/:gymId/attendance',
+  authenticate,
+  withGymParam,
+  requireGymPermission('manage_attendance'),
+  attendanceController.listGymAttendance
+);
+router.post(
+  '/:gymId/attendance/check-in/:memberId',
+  authenticate,
+  withGymParam,
+  requireGymPermission('manage_attendance'),
+  attendanceController.staffCheckIn
+);
 
 // --- Staff management (owner-only, deliberately not delegable) ---
 router.post(

@@ -12,13 +12,16 @@ import {
   ShieldCheck,
   Trash2,
   Mail,
+  QrCode,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
 import KpiCard from '../../components/ui/KpiCard';
 import { gymApi, STAFF_PERMISSIONS } from '../../api/gymApi';
+import { attendanceApi } from '../../api/attendanceApi';
 
 // Each tab lists the permission that unlocks it for a delegated staff
 // account. `null` means it's open to anyone with dashboard access
@@ -27,6 +30,7 @@ import { gymApi, STAFF_PERMISSIONS } from '../../api/gymApi';
 const TABS = [
   { id: 'overview', label: 'Overview', permission: 'view_overview' },
   { id: 'members', label: 'Members', permission: 'manage_members' },
+  { id: 'attendance', label: 'Attendance', permission: 'manage_attendance' },
   { id: 'plans', label: 'Plans', permission: 'manage_plans' },
   { id: 'products', label: 'Products', permission: 'manage_products' },
   { id: 'leaderboard', label: 'Leaderboard', permission: null },
@@ -337,6 +341,108 @@ function StaffRow({ member, gymId, onChanged }) {
   );
 }
 
+function AttendanceTab({ gymId }) {
+  const [members, setMembers] = useState([]);
+  const [log, setLog] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [checkingInId, setCheckingInId] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([gymApi.getMembers(gymId), attendanceApi.listGymLog(gymId)])
+      .then(([membersData, logData]) => {
+        setMembers(membersData.members);
+        setLog(logData);
+      })
+      .finally(() => setLoading(false));
+  }, [gymId]);
+
+  useEffect(load, [load]);
+
+  const handleManualCheckIn = async (memberId) => {
+    setCheckingInId(memberId);
+    try {
+      await attendanceApi.staffCheckIn(gymId, memberId);
+      load();
+    } finally {
+      setCheckingInId(null);
+    }
+  };
+
+  const checkInUrl = `${window.location.origin}/app/checkin/${gymId}?method=qr`;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-8 text-muted">
+        <Loader2 size={16} className="animate-spin" /> Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="mb-3 flex items-center gap-2">
+          <QrCode size={18} className="text-tape" />
+          <h3 className="font-semibold text-chalk">Front-desk QR code</h3>
+        </div>
+        <p className="mb-3 text-sm text-muted">
+          Print this and stick it near the entrance — members scan it with their phone camera to
+          check in instantly, no app fumbling required.
+        </p>
+        <div className="flex items-center gap-4">
+          <div className="rounded-lg bg-white p-3">
+            <QRCodeSVG value={checkInUrl} size={120} />
+          </div>
+          <p className="break-all font-mono text-xs text-muted">{checkInUrl}</p>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-3 font-semibold text-chalk">Manual check-in</h3>
+        <p className="mb-3 text-sm text-muted">For members who forgot their phone.</p>
+        <div className="max-h-64 space-y-2 overflow-y-auto">
+          {members.length === 0 ? (
+            <p className="text-sm text-muted">No active members yet.</p>
+          ) : (
+            members.map((m) => (
+              <div key={m._id} className="flex items-center justify-between rounded-lg bg-raised px-3 py-2">
+                <span className="text-sm text-chalk">{m.userId?.profile?.name || m.userId?.email}</span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={checkingInId === m.userId?._id}
+                  onClick={() => handleManualCheckIn(m.userId?._id)}
+                >
+                  {checkingInId === m.userId?._id ? 'Checking in…' : 'Check in'}
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-3 font-semibold text-chalk">Today's check-in log</h3>
+        {log.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted">No check-ins yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {log.map((entry) => (
+              <div key={entry._id} className="flex items-center justify-between border-b border-steel/50 py-2 text-sm last:border-b-0">
+                <span className="text-chalk">{entry.userId?.profile?.name || entry.userId?.email}</span>
+                <span className="text-xs text-muted">
+                  {new Date(entry.checkInAt).toLocaleString()} · <Badge tone="neutral">{entry.method}</Badge>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 function StaffTab({ gymId }) {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -450,7 +556,7 @@ export default function OwnerDashboard() {
   }, [gymId, activeTab]);
 
   useEffect(() => {
-    if (activeTab !== 'staff') loadTabData();
+    if (activeTab !== 'staff' && activeTab !== 'attendance') loadTabData();
   }, [loadTabData, activeTab]);
 
   if (resolving) {
@@ -591,6 +697,7 @@ export default function OwnerDashboard() {
       )}
 
       {activeTab === 'staff' && isOwner && <StaffTab gymId={gymId} />}
+      {activeTab === 'attendance' && <AttendanceTab gymId={gymId} />}
     </div>
   );
 }

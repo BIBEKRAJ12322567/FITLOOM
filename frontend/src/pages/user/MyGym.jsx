@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Calendar, RefreshCw, Loader2, ArrowRight, Search } from 'lucide-react';
+import { Building2, Calendar, RefreshCw, Loader2, ArrowRight, Search, LogIn } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -136,15 +136,27 @@ export default function MyGym() {
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <Badge tone={STATUS_TONE[m.status] || 'neutral'}>{m.status}</Badge>
-                    <Button
-                      onClick={() => handleRenew(m._id)}
-                      disabled={renewingId === m._id}
-                      size="sm"
-                      variant="secondary"
-                      className="gap-1.5"
-                    >
-                      <RefreshCw size={13} /> {renewingId === m._id ? 'Renewing…' : 'Renew'}
-                    </Button>
+                    <div className="flex gap-2">
+                      {m.status === 'active' && (
+                        <Button
+                          as={Link}
+                          to={`/app/checkin/${m.gymId?._id}`}
+                          size="sm"
+                          className="gap-1.5"
+                        >
+                          <LogIn size={13} /> Check In
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => handleRenew(m._id)}
+                        disabled={renewingId === m._id}
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5"
+                      >
+                        <RefreshCw size={13} /> {renewingId === m._id ? 'Renewing…' : 'Renew'}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
