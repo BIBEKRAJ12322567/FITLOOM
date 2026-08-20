@@ -4,9 +4,12 @@ import { ArrowLeft, ShoppingCart, Loader2, CheckCircle2, Package } from 'lucide-
 import Card from '../../../components/ui/Card';
 import Button from '../../../components/ui/Button';
 import { gymApi } from '../../../api/gymApi';
+import { useAuth } from '../../../context/AuthContext';
+import { openRazorpayCheckout } from '../../../utils/checkout';
 
 export default function GymStore() {
   const { gymId } = useParams();
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -43,11 +46,20 @@ export default function GymStore() {
     setOrderError('');
     try {
       const items = cartItems.map(({ productId, qty }) => ({ productId, qty }));
-      const order = await gymApi.createOrder(gymId, items);
-      setOrderSuccess(order);
+      const result = await gymApi.createOrder(gymId, items);
+      if (result.requiresPayment) {
+        await openRazorpayCheckout({
+          razorpayOrder: result.razorpayOrder,
+          payment: result.payment,
+          userEmail: user?.email,
+          userName: user?.profile?.name,
+          description: `Supplement store — ${cartItems.length} item${cartItems.length !== 1 ? 's' : ''}`,
+        });
+      }
+      setOrderSuccess(result.order);
       setCart({});
     } catch (err) {
-      setOrderError(err.response?.data?.error?.message || 'Checkout failed. Try again.');
+      setOrderError(err.response?.data?.error?.message || err.message || 'Checkout failed. Try again.');
     } finally {
       setCheckingOut(false);
     }

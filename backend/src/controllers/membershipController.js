@@ -1,8 +1,8 @@
 const { MembershipPlan, Membership } = require('../models');
 const AppError = require('../utils/AppError');
-const { recordMockPayment } = require('../services/paymentService');
+const paymentService = require('../services/paymentService');
 
-/** POST /api/gyms/:gymId/membership-plans — owner creates a plan. Requires requireGymOwner. */
+/** POST /api/gyms/:gymId/membership-plans — owner/staff-with-permission creates a plan. */
 async function createPlan(req, res, next) {
   try {
     const { name, durationDays, price, features } = req.body;
@@ -25,7 +25,17 @@ async function listPlans(req, res, next) {
   }
 }
 
-/** POST /api/gyms/:gymId/memberships — a member joins this gym on a plan. */
+/**
+ * POST /api/gyms/:gymId/memberships — a member joins this gym on a plan.
+ *
+ * Two-phase when a real gateway is configured: the membership is created
+ * as 'pending_payment' (not counted as active anywhere — getGymOverview's
+ * activeMemberCount filters on status: 'active') and only flips to
+ * 'active' once /api/payments/:paymentId/verify confirms the Razorpay
+ * payment. With no gateway configured, paymentService's mock path
+ * captures instantly and this activates the membership immediately, same
+ * as before real payments existed.
+ */
 async function joinGym(req, res, next) {
   try {
     const { planId } = req.body;
@@ -35,6 +45,10 @@ async function joinGym(req, res, next) {
       return next(new AppError('Membership plan not found or inactive', 404, 'NOT_FOUND'));
     }
 
+    // Placeholder dates, required by the schema — overwritten with real
+    // ones once payment is confirmed (paymentController.finalizeMembershipPayment).
+    // Harmless in the meantime since 'pending_payment' status keeps this
+    // membership out of every active-member query.
     const startDate = new Date();
     const endDate = new Date(startDate.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
@@ -43,24 +57,39 @@ async function joinGym(req, res, next) {
       planId: plan._id,
       startDate,
       endDate,
-      status: 'active',
+      status: paymentService.isRazorpayConfigured ? 'pending_payment' : 'active',
     });
 
-    await recordMockPayment({
+    const paymentResult = await paymentService.initiatePayment({
       payerUserId: req.user.id,
       gymId: req.params.gymId,
       purpose: 'membership',
       relatedEntityId: membership._id,
       amount: plan.price,
+      metadata: { action: 'join' },
     });
 
-    res.status(201).json({ membership });
+    res.status(201).json({
+      membership,
+      requiresPayment: paymentResult.requiresPayment,
+      payment: paymentResult.payment,
+      razorpayOrder: paymentResult.razorpayOrder || null,
+    });
   } catch (err) {
     next(err);
   }
 }
 
-/** POST /api/memberships/:membershipId/renew — extends an existing membership by its plan's duration. */
+/**
+ * POST /api/memberships/:membershipId/renew — extends an existing
+ * membership by its plan's duration.
+ *
+ * With a real gateway configured, the extension itself is deferred to
+ * /api/payments/:paymentId/verify (see paymentController.finalizeMembershipPayment)
+ * so a renewal isn't granted before payment is actually confirmed. With no
+ * gateway configured, extends immediately — identical to the original
+ * mock-only behavior.
+ */
 async function renewMembership(req, res, next) {
   try {
     // This route is NOT gym-scoped by URL param (no :gymId), so we can't
@@ -82,25 +111,53 @@ async function renewMembership(req, res, next) {
       return next(new AppError('The plan for this membership no longer exists', 404, 'NOT_FOUND'));
     }
 
-    // Renewal extends from whichever is later: today, or the current
-    // expiry — so renewing early doesn't lose the remaining paid time.
-    const base = membership.endDate > new Date() ? membership.endDate : new Date();
-    membership.endDate = new Date(base.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
-    membership.status = 'active';
-    await membership.save();
-
-    await recordMockPayment({
+    const paymentResult = await paymentService.initiatePayment({
       payerUserId: req.user.id,
       gymId: membership.gymId,
       purpose: 'membership',
       relatedEntityId: membership._id,
       amount: plan.price,
+      metadata: { action: 'renew' },
     });
 
-    res.status(200).json({ membership });
+    if (!paymentResult.requiresPayment) {
+      // Renewal extends from whichever is later: today, or the current
+      // expiry — so renewing early doesn't lose the remaining paid time.
+      const base = membership.endDate > new Date() ? membership.endDate : new Date();
+      membership.endDate = new Date(base.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+      membership.status = 'active';
+      await membership.save();
+    }
+
+    res.status(200).json({
+      membership,
+      requiresPayment: paymentResult.requiresPayment,
+      payment: paymentResult.payment,
+      razorpayOrder: paymentResult.razorpayOrder || null,
+    });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { createPlan, listPlans, joinGym, renewMembership };
+/**
+ * GET /api/memberships/mine — every membership this user holds, across all
+ * gyms. Not gym-scoped (no :gymId in the URL), so tenant scoping is
+ * bypassed the same way renewMembership does it above.
+ */
+async function listMyMemberships(req, res, next) {
+  try {
+    const memberships = await Membership.find({ userId: req.user.id })
+      .setOptions({ skipTenantScope: true })
+      .populate('gymId', 'name slug')
+      .populate('planId', 'name durationDays price')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({ memberships });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { createPlan, listPlans, joinGym, renewMembership, listMyMemberships };

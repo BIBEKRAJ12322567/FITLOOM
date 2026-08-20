@@ -5,10 +5,13 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { gymApi } from '../../api/gymApi';
+import { useAuth } from '../../context/AuthContext';
+import { openRazorpayCheckout } from '../../utils/checkout';
 
 const STATUS_TONE = { active: 'success', expired: 'danger', frozen: 'warning', cancelled: 'neutral' };
 
 export default function MyGym() {
+  const { user } = useAuth();
   const [myGyms, setMyGyms] = useState([]);
   const [myMemberships, setMyMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +33,25 @@ export default function MyGym() {
 
   const handleRenew = async (membershipId) => {
     setRenewingId(membershipId);
+    setError('');
     try {
-      await gymApi.renewMembership(membershipId);
+      const result = await gymApi.renewMembership(membershipId);
+      if (result.requiresPayment) {
+        const membership = myMemberships.find((m) => m._id === membershipId);
+        await openRazorpayCheckout({
+          razorpayOrder: result.razorpayOrder,
+          payment: result.payment,
+          userEmail: user?.email,
+          userName: user?.profile?.name,
+          description: `${membership?.gymId?.name || 'Gym'} — renewal`,
+        });
+      }
+      // Refetch rather than trust result.membership: when a real gateway is
+      // configured, that object still holds the PRE-renewal endDate — the
+      // extension only happens server-side once checkout is verified above.
       loadData();
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Renewal failed.');
+      setError(err.response?.data?.error?.message || err.message || 'Renewal failed.');
     } finally {
       setRenewingId(null);
     }
@@ -48,15 +65,37 @@ export default function MyGym() {
     );
   }
 
+  const ownedGyms = myGyms.filter((g) => g.myRole === 'owner');
+  const staffedGyms = myGyms.filter((g) => g.myRole === 'staff');
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="font-display text-3xl tracking-wide text-chalk">MY GYM</h1>
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {myGyms.length > 0 && (
+      {ownedGyms.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">You own</h2>
-          {myGyms.map((gym) => (
+          {ownedGyms.map((gym) => (
+            <Card key={gym._id} className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Building2 className="text-tape" size={20} />
+                <span className="font-semibold text-chalk">{gym.name}</span>
+              </div>
+              <Button as={Link} to={`/app/owner?gymId=${gym._id}`} size="sm" variant="secondary" className="gap-1.5">
+                Manage <ArrowRight size={14} />
+              </Button>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {staffedGyms.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
+            You help manage
+          </h2>
+          {staffedGyms.map((gym) => (
             <Card key={gym._id} className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Building2 className="text-tape" size={20} />

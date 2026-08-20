@@ -29,6 +29,13 @@ const paymentSchema = new Schema(
       default: 'created',
       index: true,
     },
+    // Small bag of purpose-specific context needed to finalize the related
+    // entity once payment is confirmed — e.g. { action: 'join' | 'renew' }
+    // for membership payments, so the verify step knows whether to
+    // activate a fresh membership or extend an existing one. Deliberately
+    // Mixed/loose rather than a typed field per purpose, since this is
+    // internal bookkeeping the API never exposes directly.
+    metadata: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true }
 );

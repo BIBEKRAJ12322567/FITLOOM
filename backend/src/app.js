@@ -6,6 +6,7 @@ const aiRoutes = require('./routes/aiRoutes');
 const exerciseRoutes = require('./routes/exerciseRoutes');
 const gymRoutes = require('./routes/gymRoutes');
 const membershipRoutes = require('./routes/membershipRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const workoutRoutes = require('./routes/workoutRoutes');
 const trainerRoutes = require('./routes/trainerRoutes');
 const errorHandler = require('./middleware/errorHandler');
@@ -23,6 +24,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/exercises', exerciseRoutes);
 app.use('/api/gyms', gymRoutes);
 app.use('/api/memberships', membershipRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/trainers', trainerRoutes);
 

@@ -10,7 +10,11 @@ const membershipSchema = new Schema(
     endDate: { type: Date, required: true, index: true }, // scanned by the renewal-reminder job
     status: {
       type: String,
-      enum: ['active', 'expired', 'frozen', 'cancelled'],
+      // 'pending_payment' only exists while waiting on a real Razorpay
+      // checkout to complete — the mock instant-capture path (no gateway
+      // configured) never produces it, going straight to 'active' the
+      // same way this always worked before.
+      enum: ['pending_payment', 'active', 'expired', 'frozen', 'cancelled'],
       default: 'active',
       index: true,
     },

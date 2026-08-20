@@ -6,9 +6,12 @@ import Button from '../../../components/ui/Button';
 import Badge from '../../../components/ui/Badge';
 import StarRating from '../../../components/ui/StarRating';
 import { gymApi } from '../../../api/gymApi';
+import { useAuth } from '../../../context/AuthContext';
+import { openRazorpayCheckout } from '../../../utils/checkout';
 
 export default function GymDetail() {
   const { gymId } = useParams();
+  const { user } = useAuth();
   const [gym, setGym] = useState(null);
   const [plans, setPlans] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -45,10 +48,20 @@ export default function GymDetail() {
     setJoiningPlanId(planId);
     setJoinError('');
     try {
-      const membership = await gymApi.joinGym(gymId, planId);
-      setJoinedMembership(membership);
+      const result = await gymApi.joinGym(gymId, planId);
+      if (result.requiresPayment) {
+        const plan = plans.find((p) => p._id === planId);
+        await openRazorpayCheckout({
+          razorpayOrder: result.razorpayOrder,
+          payment: result.payment,
+          userEmail: user?.email,
+          userName: user?.profile?.name,
+          description: `${gym.name} — ${plan?.name || 'membership'}`,
+        });
+      }
+      setJoinedMembership(result.membership);
     } catch (err) {
-      setJoinError(err.response?.data?.error?.message || 'Could not join this gym. Try again.');
+      setJoinError(err.response?.data?.error?.message || err.message || 'Could not join this gym. Try again.');
     } finally {
       setJoiningPlanId(null);
     }
