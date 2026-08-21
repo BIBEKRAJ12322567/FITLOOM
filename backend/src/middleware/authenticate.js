@@ -27,11 +27,16 @@ async function authenticate(req, res, next) {
       throw new AppError('Invalid or expired access token', 401, code);
     }
 
-    // Cheap existence check so a deleted/deactivated user can't keep using a
-    // still-valid access token for the remainder of its 15-minute life.
-    const exists = await User.exists({ _id: payload.sub });
-    if (!exists) {
+    // Cheap existence + suspension check so a deleted or newly-suspended
+    // account can't keep using a still-valid access token for the
+    // remainder of its 15-minute life — suspending someone should take
+    // effect on their very next request, not wait for token expiry.
+    const user = await User.findById(payload.sub).select('isSuspended').lean();
+    if (!user) {
       throw new AppError('User no longer exists', 401, 'UNAUTHENTICATED');
+    }
+    if (user.isSuspended) {
+      throw new AppError('This account has been suspended', 403, 'ACCOUNT_SUSPENDED');
     }
 
     req.user = {

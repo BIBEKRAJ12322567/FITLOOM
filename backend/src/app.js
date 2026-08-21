@@ -9,6 +9,7 @@ const membershipRoutes = require('./routes/membershipRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const workoutRoutes = require('./routes/workoutRoutes');
 const dietRoutes = require('./routes/dietRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const trainerRoutes = require('./routes/trainerRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -28,6 +29,7 @@ app.use('/api/memberships', membershipRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/diet', dietRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/trainers', trainerRoutes);
 
 // 404 for unmatched routes

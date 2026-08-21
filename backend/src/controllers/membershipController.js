@@ -1,4 +1,4 @@
-const { MembershipPlan, Membership } = require('../models');
+const { MembershipPlan, Membership, Gym } = require('../models');
 const AppError = require('../utils/AppError');
 const paymentService = require('../services/paymentService');
 
@@ -39,6 +39,11 @@ async function listPlans(req, res, next) {
 async function joinGym(req, res, next) {
   try {
     const { planId } = req.body;
+
+    const gym = await Gym.findById(req.params.gymId);
+    if (gym?.isSuspended) {
+      return next(new AppError('This gym is not currently accepting new members', 403, 'GYM_SUSPENDED'));
+    }
 
     const plan = await MembershipPlan.findById(planId);
     if (!plan || !plan.isActive) {

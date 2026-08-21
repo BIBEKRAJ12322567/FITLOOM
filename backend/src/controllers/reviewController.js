@@ -62,4 +62,4 @@ async function listReviews(req, res, next) {
   }
 }
 
-module.exports = { createOrUpdateReview, listReviews };
+module.exports = { createOrUpdateReview, listReviews, recalculateGymRating };

@@ -42,6 +42,12 @@ const gymSchema = new Schema(
     // rather than aggregated live on every gym-list request.
     ratingAvg: { type: Number, default: 0, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0 },
+
+    // Platform moderation flag — an admin can pull a gym from public
+    // search/browsing and block new joins without deleting its data or
+    // touching the owner's account. The owner dashboard still works while
+    // suspended (they can see why and fix whatever triggered it).
+    isSuspended: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

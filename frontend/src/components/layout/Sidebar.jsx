@@ -12,6 +12,7 @@ import {
   Users,
   UserCircle,
   Settings,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -63,6 +64,19 @@ export default function Sidebar({ open, onClose }) {
       {
         label: 'Manage',
         items: [{ to: '/app/trainer-studio', label: 'Trainer Studio', icon: Settings }],
+      },
+    ];
+  }
+
+  // Additive, not exclusive with the branches above — a platform admin
+  // account might not hold any other role, but nothing stops one from
+  // also owning a gym; either way they should still see the Admin link.
+  if (user?.role === 'admin') {
+    sections = [
+      ...sections,
+      {
+        label: 'Platform',
+        items: [{ to: '/app/admin', label: 'Admin', icon: ShieldAlert }],
       },
     ];
   }

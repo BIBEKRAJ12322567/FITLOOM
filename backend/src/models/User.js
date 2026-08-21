@@ -43,6 +43,12 @@ const userSchema = new Schema(
       enum: ['user', 'trainer', 'gym_owner', 'gym_staff', 'admin'],
       default: 'user',
     },
+    // Platform-level moderation flag, distinct from a gym's own member
+    // status (Membership.status) — this blocks the account everywhere,
+    // not just at one gym. Checked on every request in authenticate.js
+    // (not just at login) so a suspension takes effect immediately, even
+    // against an access token issued minutes earlier.
+    isSuspended: { type: Boolean, default: false },
     // Set at login/gym-switch time for gym_owner/gym_staff/trainer sessions.
     // Copied into the JWT payload; read by resolveTenant middleware.
     activeGymId: { type: Schema.Types.ObjectId, ref: 'Gym', default: null },

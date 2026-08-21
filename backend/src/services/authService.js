@@ -52,6 +52,10 @@ async function login({ email, password }, meta = {}) {
     throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
   }
 
+  if (user.isSuspended) {
+    throw new AppError('This account has been suspended. Contact support for details.', 403, 'ACCOUNT_SUSPENDED');
+  }
+
   const matches = await bcrypt.compare(password, user.passwordHash);
   if (!matches) {
     throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');

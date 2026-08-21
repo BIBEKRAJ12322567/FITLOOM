@@ -52,7 +52,7 @@ async function registerGym(req, res, next) {
 async function listGyms(req, res, next) {
   try {
     const { city, search, page = 1, limit = 20 } = req.query;
-    const filter = {};
+    const filter = { isSuspended: { $ne: true } };
     if (city) filter['address.city'] = new RegExp(`^${city}$`, 'i');
     if (search) filter.name = new RegExp(search, 'i');
 

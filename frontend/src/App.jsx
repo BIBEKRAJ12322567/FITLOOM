@@ -27,6 +27,7 @@ import BmiCalculator from './pages/user/calculators/BmiCalculator';
 import BodyFatCalculator from './pages/user/calculators/BodyFatCalculator';
 import MyGym from './pages/user/MyGym';
 import CheckIn from './pages/user/CheckIn';
+import AdminDashboard from './pages/user/AdminDashboard';
 import BrowseGyms from './pages/user/gyms/BrowseGyms';
 import GymDetail from './pages/user/gyms/GymDetail';
 import GymStore from './pages/user/gyms/GymStore';
@@ -72,6 +73,7 @@ export default function App() {
         <Route path="calculators/body-fat" element={<BodyFatCalculator />} />
         <Route path="my-gym" element={<MyGym />} />
         <Route path="checkin/:gymId" element={<CheckIn />} />
+        <Route path="admin" element={<AdminDashboard />} />
         <Route path="gyms" element={<BrowseGyms />} />
         <Route path="gyms/:gymId" element={<GymDetail />} />
         <Route path="gyms/:gymId/store" element={<GymStore />} />
